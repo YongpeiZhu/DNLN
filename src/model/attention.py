@@ -10,6 +10,8 @@ from model import common
 from model.utils.tools import extract_image_patches,\
     reduce_mean, reduce_sum, same_padding
 
+from model.layers import ConvOffset2D
+
 #in-scale non-local attention
 class NonLocalAttention(nn.Module):
     def __init__(self, channel=128, reduction=2, ksize=3, scale=3, stride=1, softmax_scale=10, average=True, conv=common.default_conv):
@@ -31,6 +33,43 @@ class NonLocalAttention(nn.Module):
         x_assembly = x_assembly.view(N,-1,H*W).permute(0,2,1)
         x_final = torch.matmul(score, x_assembly)
         return x_final.permute(0,2,1).view(N,-1,H,W)
+
+#Deformable non-local attention
+class DeformableNonLocalAttention(nn.Module):
+    def __init__(self, channel=128, reduction=2, ksize=3, scale=3, stride=1, softmax_scale=10, average=True,
+                 conv=common.default_conv):
+        super(DeformableNonLocalAttention, self).__init__()
+        #self.conv_match1 = common.BasicBlock(conv, channel, channel // reduction, 1, bn=False, act=nn.PReLU())
+        #self.conv_match2 = common.BasicBlock(conv, channel, channel // reduction, 1, bn=False, act=nn.PReLU())
+        self.conv_assembly = common.BasicBlock(conv, channel, channel, 1, bn=False, act=nn.PReLU())
+        self.offset12 = ConvOffset2D(2)
+        self.conv1 = nn.Conv2d(2, 1, kernel_size=7, padding=3, bias=False)
+
+    def forward(self, input):
+        #x_embed_1 = self.conv_match1(input)
+        #x_embed_2 = self.conv_match2(input)
+        avg_out1 = torch.mean(input, dim=1, keepdim=True)
+        max_out1, _ = torch.max(input, dim=1, keepdim=True)
+        x_embed_1 = torch.cat([avg_out1, max_out1], dim=1)
+        x_embed_1 = self.offset12(x_embed_1)
+        x_embed_1 = self.conv1(x_embed_1)
+        # print(x_embed_1.shape,'1111111')
+        avg_out2 = torch.mean(input, dim=1, keepdim=True)
+        max_out2, _ = torch.max(input, dim=1, keepdim=True)
+        x_embed_2 = torch.cat([avg_out2, max_out2], dim=1)
+        x_embed_2 = self.offset12(x_embed_2)
+        x_embed_2 = self.conv1(x_embed_2)
+        # print(x_embed_2.shape, '22222222')
+        x_assembly = self.conv_assembly(input)
+
+        N, C, H, W = x_embed_1.shape
+        x_embed_1 = x_embed_1.permute(0, 2, 3, 1).view((N, H * W, C))
+        x_embed_2 = x_embed_2.view(N, C, H * W)
+        score = torch.matmul(x_embed_1, x_embed_2)
+        score = F.softmax(score, dim=2)
+        x_assembly = x_assembly.view(N, -1, H * W).permute(0, 2, 1)
+        x_final = torch.matmul(score, x_assembly)
+        return x_final.permute(0, 2, 1).view(N, -1, H, W)
 
 #cross-scale non-local attention
 class CrossScaleAttention(nn.Module):
@@ -54,6 +93,7 @@ class CrossScaleAttention(nn.Module):
     def forward(self, input):
         #get embedding
         embed_w = self.conv_assembly(input)
+        #down
         match_input = self.conv_match_1(input)
         
         # b*c*h*w
@@ -62,7 +102,7 @@ class CrossScaleAttention(nn.Module):
         # kernel size on input for matching 
         kernel = self.scale*self.ksize
         
-        # raw_w is extracted for reconstruction 
+        # raw_w is extracted for reconstruction upper
         raw_w = extract_image_patches(embed_w, ksizes=[kernel, kernel],
                                       strides=[self.stride*self.scale,self.stride*self.scale],
                                       rates=[1, 1],
@@ -84,7 +124,7 @@ class CrossScaleAttention(nn.Module):
         # w shape: [N, C, k, k, L]
         w = w.view(shape_ref[0], shape_ref[1], self.ksize, self.ksize, -1)
         w = w.permute(0, 4, 1, 2, 3)    # w shape: [N, L, C, k, k]
-        w_groups = torch.split(w, 1, dim=0)
+        w_groups = torch.split(w, 1, dim=0)#middle
 
 
         y = []

@@ -105,8 +105,4 @@ class Adversarial(nn.Module):
         bce_fake = F.binary_cross_entropy_with_logits(fake, label_fake)
         bce_loss = bce_real + bce_fake
         return bce_loss
-               
-# Some references
-# https://github.com/kuc2477/pytorch-wgan-gp/blob/master/model.py
-# OR
-# https://github.com/caogang/wgan-gp/blob/master/gan_cifar10.py
+

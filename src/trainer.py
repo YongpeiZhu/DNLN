@@ -7,7 +7,10 @@ import utility
 import torch
 import torch.nn.utils as utils
 from tqdm import tqdm
-
+from gradcam import *
+from torchvision import transforms
+# from resnext import CSNLN
+# transform = transforms.Compose([transforms.Normalize([0.4948052, 0.48568845, 0.44682974], [0.24580306, 0.24236229, 0.2603115])])
 class Trainer():
     def __init__(self, args, loader, my_model, my_loss, ckp):
         self.args = args
@@ -84,6 +87,8 @@ class Trainer():
         timer_test = utility.timer()
         if self.args.save_results: self.ckp.begin_background()
         for idx_data, d in enumerate(self.loader_test):
+            print(d,'jjjjj')
+            print(idx_data,'ooooooo')
             for idx_scale, scale in enumerate(self.scale):
                 d.dataset.set_scale(idx_scale)
                 for lr, hr, filename in tqdm(d, ncols=80):

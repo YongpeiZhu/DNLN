@@ -6,7 +6,8 @@ import model
 import loss
 from option import args
 from trainer import Trainer
-
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 torch.manual_seed(args.seed)
 checkpoint = utility.checkpoint(args)
 

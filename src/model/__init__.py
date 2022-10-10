@@ -4,7 +4,15 @@ from importlib import import_module
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import os
+from gradcam import *
+from vis import *
+from torchvision import transforms
+# transform = transforms.Compose([transforms.Normalize([0.4948052, 0.48568845, 0.44682974], [0.24580306, 0.24236229, 0.2603115])])
 
+# torch.cuda.set_device(1)
+# torch.cuda.empty_cache()
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,0"
 class Model(nn.Module):
     def __init__(self, args, ckp):
         super(Model, self).__init__()
@@ -22,9 +30,11 @@ class Model(nn.Module):
 
         module = import_module('model.' + args.model.lower())
         self.model = module.make_model(args).to(self.device)
+
         if args.precision == 'half': self.model.half()
 
         if not args.cpu and args.n_GPUs > 1:
+            # self.model = nn.DataParallel(self.model, [1,2,3])
             self.model = nn.DataParallel(self.model, range(args.n_GPUs))
 
         self.load(
@@ -34,6 +44,7 @@ class Model(nn.Module):
             cpu=args.cpu
         )
         print(self.model, file=ckp.log_file)
+        print('kkkkk')
 
     def forward(self, x, idx_scale):
         self.idx_scale = idx_scale
